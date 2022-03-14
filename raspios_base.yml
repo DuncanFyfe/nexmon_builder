@@ -1,0 +1,36 @@
+---
+- hosts: all_raspios
+  become: yes
+  vars_files:
+          - pi_ssh_keys.yml
+  tasks:
+          - debug: 
+                var: PI_ID_RSA_FILE
+          - debug: 
+                var: PI_ID_RSA_PUB_FILE
+          - name: Install git
+            apt: 
+                pkg: 
+                        - git
+                        - neovim
+                        - rsync
+                state: present
+          - name: Remove useless packages from the cache
+            apt:
+                    autoclean: yes
+          - debug: 
+                var: PI_ID_RSA_FILE
+          - debug: 
+                var: PI_ID_RSA_PUB_FILE
+          - copy:
+                  src: "{{ PI_ID_RSA_FILE }}"
+                  dest: /home/pi/.ssh/id_rsa
+                  owner: pi
+                  group: pi
+                  mode: 0600
+          - copy:
+                  src: "{{ PI_ID_RSA_PUB_FILE }}"
+                  dest: /home/pi/.ssh/id_rsa.pub
+                  owner: pi
+                  group: pi
+                  mode: 0600
