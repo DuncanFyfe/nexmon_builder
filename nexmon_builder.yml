@@ -1,0 +1,58 @@
+---
+- hosts: nexmon_builder
+  become: yes
+  vars_files:
+    - external_resources.yml
+  tasks:
+    - name:  Review vars rpi_source
+      debug: 
+        var: rpi_source
+    - name: Install package dependencies
+      apt: 
+        pkg: 
+          - automake 
+          - bc
+          - bison
+          - flex
+          - gawk
+          - git
+          - libgmp3-dev
+          - libncurses5-dev
+          - libssl-dev
+          - libtool-bin
+          - make 
+          - python2
+          - qpdf
+          - raspberrypi-kernel-headers
+          - tcpdump
+          - texinfo
+          - tmux
+        state: present
+    - name: Remove useless packages from the cache
+      apt:
+        autoclean: yes
+    - name: Copy rpi-source to node.
+      copy:
+        src: "{{ rpi_source }}"
+        dest: /usr/local/bin/rpi-source
+        owner: root
+        group: root
+        mode: 0655
+    - name: Run rpi-source when necessary.
+      command: /usr/local/bin/rpi-source -q --tag-update
+      args:
+        chdir: /home/pi
+        creates: /home/pi/.rpi-source
+    - name: Make directory for building nexmon_csi
+      file:
+        path: /home/pi/work/src/nexmon_csi
+        owner: pi
+        group: pi
+        state: directory
+    - name: Install the nexmon_builder scripts.
+      git:
+        repo: git@github.com:DuncanFyfe/nexmon_builder.git 
+        dest: /home/pi/work/src/nexmon_csi
+    - name: Fix nexmon_builder install script permissions
+      file: path=/home/pi/work/src/nexmon_csi/install.sh owner=pi group=pi mode=0755 state=file
+
