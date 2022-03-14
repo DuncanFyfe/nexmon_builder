@@ -26,9 +26,8 @@
           - raspberrypi-kernel-headers
           - tcpdump
           - texinfo
-          - tmux
         state: present
-    - name: Remove useless packages from the cache
+    - name: Clean the cache.
       apt:
         autoclean: yes
     - name: Copy rpi-source to node.
