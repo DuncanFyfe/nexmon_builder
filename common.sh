@@ -1,6 +1,11 @@
 _default_project_root=$(dirname $SCRIPT_DIR)
 export PROJECT_ROOT=${PROJECT_ROOT:-${_default_project_root}}
 
+ERR_ASSERT_FILE=10
+ERR_ASSERT_DIRECTORY=11
+ERR_ASSERT_EXISTS=12
+ERR_ASSERT_VAR=13
+
 ERR_UNKNOWN=99
 
 function debug {
@@ -86,10 +91,10 @@ function assert_directory {
         # Test if the given path is a directory and exists
         # Exit with status $ERR_ASSERT_DIRECTORY if it is not.
         debug $FUNCNAME "$*"
-        local _f="$1"
+        local _d="$1"
         assert_var _d
-        if [ "X${_f}" != "X" -a ! -d "${_f}" ]; then
-                error $ERR_ASSERT_DIRECTORY "Failed assert directory: ${_f}"
+        if [ "X${_d}" != "X" -a ! -d "${_d}" ]; then
+                error $ERR_ASSERT_DIRECTORY "Failed assert directory: ${_d}"
         fi
 }
 
