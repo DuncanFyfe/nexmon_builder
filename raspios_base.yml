@@ -1,5 +1,5 @@
 ---
-- hosts: all_raspios
+- hosts: raspios_base
   become: yes
   vars_files:
           - external_resources.yml
@@ -37,17 +37,17 @@
                   group: pi
                   mode: 0600
           - name: Make the Github SSH fingerprint availaibe to all users
-          - lineinfile:
+            lineinfile:
                   create: true
                   line: "{{ lookup('file', GITHUB_SSH_FINGERPRINT_FILE) }}"
                   mode: 0644
                   path: /etc/ssh/ssh_known_hosts
                   state: present
           - name: Make the Github SSH keys the default for Github actions.
-          - blockinfile:
+            blockinfile:
                   create: true
                   group: pi
-                  line: "{{ lookup('file', SSH_CONFIG_FILE) }}"
+                  block: "{{ lookup('file', SSH_CONFIG_FILE) }}"
                   mode: 0644
                   owner: pi
                   path: /home/pi/.ssh/config
