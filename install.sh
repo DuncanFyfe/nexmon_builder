@@ -1,10 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 export SCRIPT=$(readlink -f "$0")
 export SCRIPT_DIR=$(dirname $SCRIPT)
 export SCRIPT_NAME=$(basename $SCRIPT)
 [ "X$DEBUG" = "XALL" -o "X${DEBUG#*$SCRIPT_NAME}" != "X$DEBUG" ] && echo "SCRIPT BEGIN $SCRIPT_NAME ${@:1}"
 . $SCRIPT_DIR/common.sh
-
 
 _pwd=$PWD
 # Some boxen have multiple wireless interfaces.
@@ -14,8 +13,9 @@ _pwd=$PWD
 echo "denyinterfaces wlan0" >> /etc/dhcpcd.conf
 info "Downloading Nexmon"
 git clone git@github.com:DuncanFyfe/nexmon.git
-git checkout python2
+assert_directory nexmon
 cd nexmon
+git checkout python2
 NEXDIR=$(pwd)
 info "Done."
 
@@ -26,7 +26,7 @@ autoreconf -f -i
 ./configure
 make
 make install
-assert_file /usr/lib/arm-linux-gnueabihf/libisl.so.10
+assert_file /usr/local/lib/libisl.so
 ln -s /usr/local/lib/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
 info "Done."
 
@@ -37,7 +37,7 @@ autoreconf -f -i
 ./configure
 make
 make install
-assert_file /usr/lib/arm-linux-gnueabihf/libmpfr.so.4
+assert_file /usr/local/lib/libmpfr.so
 ln -s /usr/local/lib/libmpfr.so /usr/lib/arm-linux-gnueabihf/libmpfr.so.4
 info "Done."
 
@@ -63,7 +63,7 @@ info "Installing makecsiparams"
 cd utils/makecsiparams
 make
 assert_file $PWD/makecsiparams
-ln -s $PWD/makecsiparams /usr/local/bin/mcp
+cp $PWD/makecsiparams /usr/local/bin/mcp
 info "Done."
 
 info "Installing nexutil"
