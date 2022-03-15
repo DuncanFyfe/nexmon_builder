@@ -32,7 +32,7 @@
         autoclean: yes
     - name: Copy rpi-source to node.
       copy:
-        src: "{{ rpi_source }}"
+        src: "{{ RPI_SOURCE }}"
         dest: /usr/local/bin/rpi-source
         owner: root
         group: root
@@ -44,14 +44,15 @@
         creates: /home/pi/.rpi-source
     - name: Make directory for building nexmon_csi
       file:
-        path: /home/pi/work/src/nexmon_csi
+        path: /home/pi/work/src
         owner: pi
         group: pi
         state: directory
     - name: Install the nexmon_builder scripts.
       git:
         repo: git@github.com:DuncanFyfe/nexmon_builder.git 
-        dest: /home/pi/work/src/nexmon_csi
+        dest: /home/pi/work/src/nexmon_builder
+      become: no
     - name: Fix nexmon_builder install script permissions
-      file: path=/home/pi/work/src/nexmon_csi/install.sh owner=pi group=pi mode=0755 state=file
+      file: path=/home/pi/work/src/nexmon_builder/install.sh owner=pi group=pi mode=0755 state=file
 

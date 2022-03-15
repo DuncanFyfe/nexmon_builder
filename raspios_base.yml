@@ -2,35 +2,53 @@
 - hosts: all_raspios
   become: yes
   vars_files:
-          - pi_ssh_keys.yml
+          - external_resources.yml
   tasks:
           - debug: 
-                var: PI_ID_RSA_FILE
+                var: PI_GITHUB_ID_FILE
           - debug: 
-                var: PI_ID_RSA_PUB_FILE
-          - name: Install git
+                var: PI_GITHUB_ID_PUB_FILE
+          - debug: 
+                var: GITHUB_SSH_FINGERPRINT_FILE
+          - debug: 
+                var: SSH_CONFIG_FILE
+          - name: Install always needed packages
             apt: 
                 pkg: 
                         - git
                         - neovim
                         - rsync
                 state: present
-          - name: Remove useless packages from the cache
+          - name: Clean the package caches
             apt:
                     autoclean: yes
-          - debug: 
-                var: PI_ID_RSA_FILE
-          - debug: 
-                var: PI_ID_RSA_PUB_FILE
-          - copy:
-                  src: "{{ PI_ID_RSA_FILE }}"
-                  dest: /home/pi/.ssh/id_rsa
+          - name: Copy private ssh key
+            copy:
+                  src: "{{ PI_GITHUB_ID_FILE }}"
+                  dest: /home/pi/.ssh/github_id
                   owner: pi
                   group: pi
                   mode: 0600
-          - copy:
-                  src: "{{ PI_ID_RSA_PUB_FILE }}"
-                  dest: /home/pi/.ssh/id_rsa.pub
+          - name: Copy public private ssh key
+            copy:
+                  src: "{{ PI_GITHUB_ID_PUB_FILE }}"
+                  dest: /home/pi/.ssh/github_id.pub
                   owner: pi
                   group: pi
                   mode: 0600
+          - name: Make the Github SSH fingerprint availaibe to all users
+          - lineinfile:
+                  create: true
+                  line: "{{ lookup('file', GITHUB_SSH_FINGERPRINT_FILE) }}"
+                  mode: 0644
+                  path: /etc/ssh/ssh_known_hosts
+                  state: present
+          - name: Make the Github SSH keys the default for Github actions.
+          - blockinfile:
+                  create: true
+                  group: pi
+                  line: "{{ lookup('file', SSH_CONFIG_FILE) }}"
+                  mode: 0644
+                  owner: pi
+                  path: /home/pi/.ssh/config
+                  state: present

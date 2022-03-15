@@ -1,2 +1,6 @@
 ---
-rpi_source: external/rpi-source
+GITHUB_SSH_FINGERPRINT_FILE: external/github_fingerprint
+PI_GITHUB_ID_FILE: external/github_id
+PI_GITHUB_ID_PUB_FILE: external/github_id.pub
+RPI_SOURCE_FILE: external/rpi-source
+SSH_CONFIG_FILE: ssh_config
