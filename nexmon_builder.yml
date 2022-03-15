@@ -3,10 +3,12 @@
   become: yes
   vars_files:
     - external_resources.yml
+  vars:
+    - nexmon_interface: wlan0
   tasks:
     - name:  Review vars rpi_source
       debug: 
-        var: rpi_source
+        var: RPI_SOURCE_FILE
     - name: Install package dependencies
       apt: 
         pkg: 
@@ -32,7 +34,7 @@
         autoclean: yes
     - name: Copy rpi-source to node.
       copy:
-        src: "{{ RPI_SOURCE }}"
+        src: "{{ RPI_SOURCE_FILE }}"
         dest: /usr/local/bin/rpi-source
         owner: root
         group: root
@@ -55,4 +57,11 @@
       become: no
     - name: Fix nexmon_builder install script permissions
       file: path=/home/pi/work/src/nexmon_builder/install.sh owner=pi group=pi mode=0755 state=file
-
+    - name: DHCPC and wpasupplicant must ignore the interface used by nexmon.
+      lineinfile:
+        create: true
+        line: "denyinterfaces {{ nexmon_interface }}"
+        mode: 0664
+        path: /etc/dhcpcd.conf
+        state: present
+      

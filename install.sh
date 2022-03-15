@@ -6,11 +6,14 @@ export SCRIPT_NAME=$(basename $SCRIPT)
 . $SCRIPT_DIR/common.sh
 
 _pwd=$PWD
+
 # Some boxen have multiple wireless interfaces.
 # Removing wpasupplicate will just cause problems.
 # Tell it to ignore the first (wlan0) interface instead.
 # apt remove wpasupplicant -y
-echo "denyinterfaces wlan0" >> /etc/dhcpcd.conf
+# [2022-03-15] This has been moved into the nexmon_builder playbook
+# echo "denyinterfaces wlan0" >> /etc/dhcpcd.conf
+
 info "Downloading Nexmon"
 git clone git@github.com:DuncanFyfe/nexmon.git
 assert_directory nexmon
