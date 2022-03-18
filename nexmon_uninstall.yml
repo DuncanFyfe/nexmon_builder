@@ -93,5 +93,5 @@
       register: file
       stat: path=/var/run/reboot-required get_md5=no
     - name: Reboot the server
-      command: /sbin/reboot
+      reboot:
       when: file.stat.exists == true
