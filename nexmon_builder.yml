@@ -1,14 +1,57 @@
 ---
 - hosts: nexmon_builder
-  become: yes
+  become: no
   vars_files:
     - external_resources.yml
   vars:
     - nexmon_interface: wlan0
+    - nexmon_branch: python2
+    - nexmon_build_dir: /home/pi/local/src
+    - nexmon_dir: "{{ nexmon_build_dir }}/nexmon"
+    - nexmon_repo: git@github.com:DuncanFyfe/nexmon.git
+    - nexmon_csi_branch: master
+    - nexmon_csi_branch_alt: pi-5.4.51-plus
+    - nexmon_csi_dir: "{{ nexmon_dir }}/patches/bcm43455c0/7_45_189/nexmon_csi"
+    - nexmon_csi_repo: git@github.com:seemoo-lab/nexmon_csi.git
+    - nexmon_csi_repo_alt: git@github.com:nexmonster/nexmon_csi.git
+    - nexmon_csi_brcmfmac_version: brcmfmac_5.10.y-nexmon
+    - new_brcmfmac_file : "{{ nexmon_csi_dir }}/{{ nexmon_csi_brcmfmac_version }}/brcmfmac.ko"
+    - backup_brcmfmac_dir: "/opt/nexmon/backup"
+    - nexmon_git_update: no
+    - nexmon_csi_git_update: no
+# [2022-03-17] Both checksum algorithm here and the md5 checksum are calculated.
+# md5 is not secure but it is what Debian stores in the package checksums.
+# This makes it a good means of identifying the original kernel module.
+    - checksum_algorithm: sha256
   tasks:
-    - name:  Review vars rpi_source
-      debug: 
+    - debug: 
         var: RPI_SOURCE_FILE
+    - debug: 
+        var: nexmon_interface
+    - debug: 
+        var: nexmon_branch
+    - debug: 
+        var: nexmon_build_dir
+    - debug: 
+        var: nexmon_dir
+    - debug: 
+        var: nexmon_repo
+    - debug: 
+        var: nexmon_csi_branch
+    - debug: 
+        var: nexmon_csi_dir
+    - debug: 
+        var: nexmon_csi_repo
+    - debug: 
+        var: nexmon_csi_brcmfmac_version
+    - debug: 
+        var: new_brcmfmac_file
+    - debug: 
+        var: backup_brcmfmac_dir
+    - debug: 
+        var: nexmon_git_update
+    - debug: 
+        var: nexmon_csi_git_update
     - name: Install package dependencies
       apt: 
         pkg: 
@@ -29,39 +72,302 @@
           - tcpdump
           - texinfo
         state: present
+      become: yes
     - name: Clean the cache.
       apt:
         autoclean: yes
+      become: yes
     - name: Copy rpi-source to node.
       copy:
         src: "{{ RPI_SOURCE_FILE }}"
         dest: /usr/local/bin/rpi-source
         owner: root
         group: root
-        mode: 0655
+        mode: "a=rx"
+      # Disabled to evaluate whether rpi-source is still necessary      
+      when: 0 > 1
+      become: yes
     - name: Run rpi-source when necessary.
       command: /usr/local/bin/rpi-source -q --tag-update
+      # Disabled to evaluate whether rpi-source is still necessary      
+      when: 0 > 1
       args:
-        chdir: /home/pi
-        creates: /home/pi/.rpi-source
-    - name: Make directory for building nexmon_csi
+        chdir: /home/root
+        creates: /home/root/.rpi-source
+      become: yes
+    - name: Create the top level build directory
       file:
-        path: /home/pi/work/src
+        path: "{{ nexmon_build_dir }}"
         owner: pi
         group: pi
         state: directory
+      become: no
     - name: Install the nexmon_builder scripts.
       git:
         repo: git@github.com:DuncanFyfe/nexmon_builder.git 
-        dest: /home/pi/work/src/nexmon_builder
+        dest: "{{ nexmon_build_dir }}/nexmon_builder"
       become: no
-    - name: Fix nexmon_builder install script permissions
-      file: path=/home/pi/work/src/nexmon_builder/install.sh owner=pi group=pi mode=0755 state=file
-    - name: DHCPC and wpasupplicant must ignore the interface used by nexmon.
+    - name: Set nexmon_builder install script permissions
+      file: 
+        path: "{{ nexmon_build_dir }}/nexmon_builder/install.sh"
+        owner: pi
+        group: pi
+        mode: u=rwx,go=rx
+        state: file
+      become: yes
+    - name: Configure DHCPC (and wpasupplicant) to ignore the interface used by nexmon.
       lineinfile:
         create: true
         line: "denyinterfaces {{ nexmon_interface }}"
-        mode: 0664
+        mode: ug=rw,o=r
         path: /etc/dhcpcd.conf
         state: present
-      
+      become: yes
+    - name: Clone the nexmon repository
+      git:
+        force: yes
+        repo: "{{ nexmon_repo }}"
+        dest: "{{ nexmon_dir }}"
+        version: "{{ nexmon_branch }}"
+        update: "{{ nexmon_git_update }}"
+      become: no
+    - name: Configure and build libISL
+      command: "{{ item }}"
+      args:
+        chdir: "{{ nexmon_dir }}/buildtools/isl-0.10"
+        creates: "{{ nexmon_dir }}/buildtools/isl-0.10/.libs/libisl.so.10.0.0"
+      with_items:
+        - "autoreconf -f -i"
+        - "./configure"
+        - "make"
+      become: no
+    - name: Install libISL
+      command: "{{ item }}"
+      with_items:
+        - "make install"
+      become: yes
+      args:
+        chdir: "{{ nexmon_dir }}/buildtools/isl-0.10"
+        creates: /usr/local/lib/libisl.so
+    - name: Link libisl.so.10 in place
+      file:
+        src: /usr/local/lib/libisl.so 
+        dest: /usr/lib/arm-linux-gnueabihf/libisl.so.10
+        state: link
+      become: yes
+    - name: Configure and build libMPFR
+      command: "{{ item }}"
+      # [2022-03-17] NOTE: Yes, the package version 3.1.4 and library version 4.1.4 are correct.
+      args:
+        chdir: "{{ nexmon_dir }}/buildtools/mpfr-3.1.4"
+        creates: "{{ nexmon_dir }}/buildtools/mpfr-3.1.4/src/.libs/libmpfr.so.4.1.4"
+      with_items:
+        - "autoreconf -f -i"
+        - "./configure"
+        - "make"
+      become: no
+    - name: Install libMPFR
+      command: make install 
+      args:
+        chdir: "{{ nexmon_dir }}/buildtools/mpfr-3.1.4"
+        creates: /usr/local/lib/libmpfr.so
+      become: yes
+    - name: Link libmpfr.so.4 in place
+      file:
+        src: /usr/local/lib/libmpfr.so
+        dest: /usr/lib/arm-linux-gnueabihf/libmpfr.so.4
+        state: link
+      become: yes
+    - name: Build nexmon
+      shell: "source {{ nexmon_dir }}/setup_env.sh && make"
+      args:
+        chdir: "{{ nexmon_dir }}"
+        executable: /bin/bash
+        creates: "{{ nexmon_dir }}/firmwares/bcm43455c0/7_45_189/ucode.bin"
+      become: no
+    - name: Clone the nexmon_csi repository
+      git:
+        force: yes
+        repo: "{{ nexmon_csi_repo }}"
+        dest: "{{ nexmon_csi_dir }}"
+        version: "{{ nexmon_csi_branch }}"
+        update: "{{ nexmon_csi_git_update }}"
+      become: no
+    - name: Install Firmware
+      shell: "source  {{ nexmon_dir }}/setup_env.sh && make install-firmware"
+      args:
+        chdir: "{{ nexmon_csi_dir }}"
+        creates: "{{ new_brcmfmac_file }}"
+        executable: /bin/bash
+      become: yes
+    - name: Build makecsiparams
+      shell: "source {{ nexmon_dir }}/setup_env.sh && make"
+      args:
+        chdir: "{{ nexmon_csi_dir }}/utils/makecsiparams"
+        creates: "{{ nexmon_csi_dir }}/utils/makecsiparams/makecsiparams"
+        executable: /bin/bash
+      become: no
+    - name: Install makecsiparams
+      copy:
+        dest: /usr/local/bin/mcp
+        group: root
+        mode: a=rx
+        owner: root
+        remote_src: yes
+        src: "{{ nexmon_csi_dir }}/utils/makecsiparams/makecsiparams"
+      become: yes
+    - name: Remove stale nexutil files.
+# If nexmon_git_update is true then all unclean files will be removed by the nexmon git task.
+# If nexmon_csi_git_update is true but and nexmon_git_update is false then nexutil will have
+# stale content from the previous build
+      shell: "source  {{ nexmon_dir }}/setup_env.sh && make clean"
+      args:
+        chdir: "{{ nexmon_dir }}/utilities/nexutil"
+        executable: /bin/bash
+        creates: "{{ nexmon_dir }}/utilities/nexutil/nexutil"
+      become: no
+      when: nexmon_csi_git_update|bool == true and nexmon_git_update|bool == false
+    - name: Build nexutil
+      shell: "source  {{ nexmon_dir }}/setup_env.sh && make"
+      args:
+        chdir: "{{ nexmon_dir }}/utilities/nexutil"
+        creates: "{{ nexmon_dir }}/utilities/nexutil/nexutil"
+        executable: /bin/bash
+      become: no
+    - name: Install nexutil
+      shell: "source {{ nexmon_dir }}/setup_env.sh && make install"
+      args:
+        chdir: "{{ nexmon_dir }}/utilities/nexutil"
+        creates: /usr/local/bin/nexutil
+        executable: /bin/bash
+      become: yes
+    - name: Capture the new kernel module stats
+      stat:
+        path: "{{ new_brcmfmac_file }}"
+        checksum_algorithm: "{{ checksum_algorithm }}"
+        get_checksum: yes
+      register: new_brcmfmac_stat
+    - debug:
+        var: new_brcmfmac_stat
+    - name: Capture the new kernel module hash
+      set_fact:
+        new_brcmfmac_hash: "{{ new_brcmfmac_stat.stat.checksum }}"
+    - name: Capture the new kernel module stats (md5)
+      stat:
+        path: "{{ new_brcmfmac_file }}"
+        checksum_algorithm: md5
+        get_checksum: yes
+      register: new_brcmfmac_stat_md5
+    - debug:
+        var: new_brcmfmac_stat_md5
+    - name: Capture the new kernel module md5 hash
+      set_fact:
+        new_brcmfmac_md5_hash: "{{ new_brcmfmac_stat_md5.stat.checksum }}"
+    - debug:
+        var: new_brcmfmac_md5_hash
+    - name: Get kernel revision (command)
+      command: uname -r
+      become: no
+      register: uname_r
+    - debug:
+        var: uname_r
+    - name: Get the kernel revision (value) Capture the new kernel revision
+      set_fact:
+        cur_kernel_revision: "{{ uname_r.stdout }}"
+    - debug:
+        var: cur_kernel_revision
+    - name: Find the current kernel module
+      command: modinfo brcmfmac -n
+      become: yes
+      register: cur_brcmfmac_modinfo
+    - debug:
+        var: cur_brcmfmac_modinfo
+    - name: Capture the current kernel module filename
+      set_fact:
+        cur_brcmfmac_file: "{{ cur_brcmfmac_modinfo.stdout }}"
+    - debug:
+        var: cur_brcmfmac_file
+    - name: Current kernel module stats
+      stat:
+        path: "{{ cur_brcmfmac_file }}"
+        checksum_algorithm: "{{ checksum_algorithm }}"
+        get_checksum: yes
+      register: cur_brcmfmac_stat
+    - name: Capture the current kernel module hash
+      set_fact:
+        cur_brcmfmac_hash: "{{ cur_brcmfmac_stat.stat.checksum }}"
+    - debug:
+        var: cur_brcmfmac_hash
+    - name: Backup directory
+      set_fact:
+        backup_brcmfmac_dir: "{{ backup_brcmfmac_dir }}/{{ cur_kernel_revision }}"
+    - debug:
+        var: backup_brcmfmac_dir
+    - name: Capture the cur kernel module stats (md5)
+      stat:
+        path: "{{ cur_brcmfmac_file }}"
+        checksum_algorithm: md5
+        get_checksum: yes
+      register: cur_brcmfmac_stat_md5
+    - debug:
+        var: cur_brcmfmac_stat_md5
+    - name: Capture the cur kernel module md5 hash
+      set_fact:
+        cur_brcmfmac_md5_hash: "{{ cur_brcmfmac_stat_md5.stat.checksum }}"
+    - debug:
+        var: cur_brcmfmac_md5_hash
+    - name: Create the backup directory 
+      file: 
+        group: root
+        mode: 0755
+        owner: root
+        path: "{{ backup_brcmfmac_dir }}"
+        state: directory
+      become: yes
+    - name: Backup kernel module filename
+      set_fact:
+        backup_brcmfmac_file: "{{ backup_brcmfmac_dir }}/brcmfmac.ko.{{ cur_brcmfmac_hash }}"
+    - debug:
+        var: backup_brcmfmac_file
+    - name: Backup current kernel module
+      copy:
+        dest: "{{ backup_brcmfmac_file }}"
+        group: root
+        mode: u=rw,go=r
+        owner: root
+        remote_src: yes
+        src: "{{ cur_brcmfmac_file }}"
+        force: no
+      become: yes
+      when: cur_brcmfmac_hash != new_brcmfmac_hash
+    - debug:
+        msg: "New and current module have the same hash ({{ cur_brcmfmac_hash }}), backup skipped."
+      when: cur_brcmfmac_hash == new_brcmfmac_hash
+    - name: 
+      lineinfile:
+        create: true
+        line: "{{ item }}"
+        mode: u=rw,go=r
+        path: "{{ backup_brcmfmac_dir }}/CHANGELOG"
+        state: present
+      with_items:
+        - "TIMESTAMP, ACTION, SOURCE, {{ checksum_algorithm }}, MD5SUM, DESTINATION"
+        - "{{ ansible_date_time.iso8601_micro }}, BACKUP, {{cur_brcmfmac_file }}, {{ cur_brcmfmac_hash }}, {{ cur_brcmfmac_md5_hash }}, {{ backup_brcmfmac_file }}"
+        - "{{ ansible_date_time.iso8601_micro }}, INSTALLED, {{new_brcmfmac_file }}, {{ new_brcmfmac_hash }}, {{ new_brcmfmac_md5_hash }},{{ cur_brcmfmac_file }}"
+      become: yes
+      when: cur_brcmfmac_hash != new_brcmfmac_hash
+    - debug:
+        msg: "New and current module have the same hash ({{ cur_brcmfmac_hash }}), changelog entry skipped."
+      when: cur_brcmfmac_hash == new_brcmfmac_hash
+    - name: Persist new kernel module
+      copy:
+        dest: "{{ cur_brcmfmac_file }}"
+        group: root
+        mode: u=rw,go=r
+        owner: root
+        remote_src: yes
+        src: "{{ new_brcmfmac_file }}"
+      become: yes
+    - name: Update kernel module dependencies
+      command: depmod -a
+      become: yes
