@@ -8,12 +8,13 @@
     - nexmon_branch: python2
     - nexmon_build_dir: /home/pi/local/src
     - nexmon_dir: "{{ nexmon_build_dir }}/nexmon"
+    # [2022-03-18] The 2022-01-28 raspios release changes python to point at python3 rather than python2
+    # This breaks some of the scripts in the repository.
+    # The python2 branch of this seemoo-lab repository fork updates the calls to python to be explicitly python2
     - nexmon_repo: git@github.com:DuncanFyfe/nexmon.git
     - nexmon_csi_branch: master
-    - nexmon_csi_branch_alt: pi-5.4.51-plus
     - nexmon_csi_dir: "{{ nexmon_dir }}/patches/bcm43455c0/7_45_189/nexmon_csi"
     - nexmon_csi_repo: git@github.com:seemoo-lab/nexmon_csi.git
-    - nexmon_csi_repo_alt: git@github.com:nexmonster/nexmon_csi.git
     - nexmon_csi_brcmfmac_version: brcmfmac_5.10.y-nexmon
     - new_brcmfmac_file : "{{ nexmon_csi_dir }}/{{ nexmon_csi_brcmfmac_version }}/brcmfmac.ko"
     - backup_brcmfmac_dir: "/opt/nexmon/backup"
