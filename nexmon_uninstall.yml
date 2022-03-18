@@ -1,0 +1,97 @@
+---
+- hosts: nexmon_builder
+  become: yes
+  vars:
+    - nexmon_interface: wlan0
+    - nexmon_build_dir: /home/pi/local/src
+    - nexmon_dir: "{{ nexmon_build_dir }}/nexmon"
+    - nexmon_csi_dir: "{{ nexmon_dir }}/patches/bcm43455c0/7_45_189/nexmon_csi"
+      backup_brcmfmac_dir: "/opt/nexmon/backup"
+    - restore_dhcpc_config: yes
+    - remove_nexmon_dir: yes
+    - remove_nexmon_csi_dir: yes
+    - remove_brcmfmac_backups: yes
+    - remove_installed_components: yes
+    - restore_firmware: yes
+  tasks:
+    - debug: 
+        var: nexmon_interface
+    - debug: 
+        var: nexmon_build_dir
+    - debug: 
+        var: nexmon_dir
+    - debug: 
+        var: nexmon_csi_dir
+    - debug: 
+        var: remove_nexmon_dir
+    - debug: 
+        var: remove_nexmon_csi_dir
+    - debug: 
+        var: remove_nexmon_backups
+    - debug: 
+        var: remove_installed_components
+    - debug: 
+        var: restore_firmware
+    - name: Unconfiguring DHCPC (and wpasupplicant) to ignore the interface used by nexmon.
+      lineinfile:
+        create: true
+        line: "denyinterfaces {{ nexmon_interface }}"
+        mode: ug=rw,o=r
+        path: /etc/dhcpcd.conf
+        state: absent 
+      when: restore_dhcpc_config == true
+    - name: Get kernel revision (command)
+      command: uname -r
+      register: uname_r
+    - debug:
+        var: uname_r
+    - name: Get the kernel revision (value) 
+      set_fact:
+        cur_kernel_revision: "{{ uname_r.stdout }}"
+    - debug:
+        var: cur_kernel_revision
+    - name: Identify backup directory
+      set_fact:
+        backup_brcmfmac_dir: "{{ backup_brcmfmac_dir }}/{{ cur_kernel_revision }}"
+    - debug:
+        var: backup_brcmfmac_dir
+    - name: Removing backups
+      file:
+        state: absent
+        path: "{{ backup_brcmfmac_dir }}"
+      when: remove_brcmfmac_backups|bool == true
+    - name: Removing installed components
+      file:
+        state: absent
+        path: "{{ item }}"
+      with_items:
+        - /usr/lib/arm-linux-gnueabihf/libisl.so.10
+        - /usr/local/lib/libisl.so
+        - /usr/lib/arm-linux-gnueabihf/libmpfr.so.4
+        - /usr/local/lib/libmpfr.so
+        - /usr/local/bin/mcp
+        - /usr/local/bin/nexutil
+        - /usr/bin/nexutil
+      when: remove_installed_components|bool == true
+    - name: Removing local nexmon_csi repository.
+      file:
+        state: absent
+        path: "{{ nexmon_csi_dir }}"
+      when: nexmon_csi_dir|bool == true
+    - name: Removing local nexmon repository.
+      file:
+        state: absent
+        path: "{{ nexmon_dir }}"
+      when: remove_nexmon_dir|bool == true
+    - name: Restoring kernel modules and firmware
+      shell: apt reinstall {{ item }}
+      with_items:
+          - firmware-brcm80211
+          - raspberrypi-kernel
+      when: restore_firmware|bool == true
+    - name: Check if a reboot is required
+      register: file
+      stat: path=/var/run/reboot-required get_md5=no
+    - name: Reboot the server
+      command: /sbin/reboot
+      when: file.stat.exists == true
