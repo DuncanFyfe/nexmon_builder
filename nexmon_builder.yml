@@ -105,19 +105,6 @@
         group: pi
         state: directory
       become: no
-    - name: Install the nexmon_builder scripts.
-      git:
-        repo: git@github.com:DuncanFyfe/nexmon_builder.git 
-        dest: "{{ nexmon_build_dir }}/nexmon_builder"
-      become: no
-    - name: Set nexmon_builder install script permissions
-      file: 
-        path: "{{ nexmon_build_dir }}/nexmon_builder/install.sh"
-        owner: pi
-        group: pi
-        mode: u=rwx,go=rx
-        state: file
-      become: yes
     - name: Configure DHCPC (and wpasupplicant) to ignore the interface used by nexmon.
       lineinfile:
         create: true
